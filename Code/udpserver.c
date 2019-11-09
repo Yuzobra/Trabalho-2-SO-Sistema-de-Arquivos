@@ -19,27 +19,18 @@
 #include <time.h>
 #include <inttypes.h>
 
+#include "udpserver.h"
+
+#define METADATASIZE 11
 #define BUFSIZE 1024
 
 char __base__[MAXPATHLEN]; 
 
-char teste[MAXPATHLEN]; // SOMENTE PARA DEBUG, REMOVER #TODO
 
+// Prototipos de funcoes estaticas
 
-
-
-// Prototipos de funcoes
-
-int createFile(char * path);
-int file_select(const struct direct *entry);
-
-
-
-int file_select(const struct direct *entry) {     
-	if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0)) return (0); // false     
-		else return (1); //true
-}
- 
+static int file_select(const struct direct *entry);
+static int parse (char *buf, int *cmd, char *name);
 
 
 
@@ -51,13 +42,12 @@ void error(char *msg) {
   exit(1);
 }
 
-int parse (char *buf, int *cmd, char *name) {
-    char *cmdstr;
 
-    cmdstr = strtok(buf," ");
-        name = strtok(NULL,"\0");
-    cmd = atoi(cmdstr);
-}
+
+
+
+
+
 int main(int argc, char **argv) {
   int sockfd; /* socket */
   int portno; /* port to listen on */
@@ -78,11 +68,6 @@ int main(int argc, char **argv) {
       printf("Error getting base directory\n"); 
       exit(0);   
   }
-
-  strcpy(teste, "/teste/teste2/nome"); //DEBUG SOMENTE #TODO
-
-  printf("%d\n",createFile(teste));
-
 
 
   /*
@@ -159,6 +144,16 @@ int main(int argc, char **argv) {
 
     printf("server received %d/%d bytes: %s\n", strlen(buf), n, buf);
 
+
+    
+    // INTERPRETA COMANDO RECEBIDO AQUI
+
+    printf("%d\n",doCommand(buf, strlen(buf)));
+
+
+
+
+
     /*
      * sendto: echo the input back to the client
      */
@@ -174,7 +169,115 @@ int main(int argc, char **argv) {
 
 
 
-int createFile(char * path) {
+/*
+*
+* Funçoes externadas
+*
+*/
+
+Errors doCommand(char * req, int lenReq) {
+  char aux[BUFSIZE];
+  int i, k = 0;
+
+  printf("doCommand\n");
+
+
+  for(i = 0; i < 6; i++) {
+    aux[i] = req[i];
+  }
+  aux[i] = '\0';
+
+  if(strcmp(aux, "WR-REQ") == 0)  /* Escrever arquivo */  {
+    printf("Write Request\n");
+
+    FILE * fp;
+    int lenPath;
+    char path[MAXPATHLEN];
+    // Pegar len do path
+    for(i = 6; req[i] != '/'; i++ ) {
+      aux[k++] = req[i];
+      // printf("%c\n", req[i]);
+    }
+    aux[k] = '\0';
+    lenPath = atoi(aux);
+    k = 0;
+    printf("Len Path: %d\n", lenPath);
+    for(; k < lenPath; i++) {
+      path[k++] = req[i]; 
+      // printf("%c\n", req[i]);
+    
+    }
+    path[k] = '\0';
+    printf("PATH: %s\n", path);
+    
+    //Verificar se arquivo existe:
+    if(createFile(path, &fp) == 1) /* Arquivo foi criado agora */ {
+      int offset, nrbytes;
+      /* Metadados:
+      * 4 bytes: ID Usuario
+      * 2 bytes: Permissoes
+      * 5 bytes: Numero de bytes já escritos no arquivo
+      */  
+      
+      for(k=0; k < 6; i++) /* ID + Permissoes */ {
+        aux[k++] = req[i];
+      }
+      aux[k] = '\0';
+      fwrite(aux, sizeof(char), 6, fp);  
+      
+      for(k=0; k < 4; i++) /* NRBytes */ {
+        aux[k++] = req[i];
+      }
+      aux[k] = '\0';
+      nrbytes = atoi(aux);
+
+      for(k=0; k < 4; i++) /* Offset */ {
+        aux[k++] = req[i];
+      }
+      aux[k] = '\0';
+      offset = atoi(aux);
+      
+
+
+      sprintf(aux, "%d", nrbytes + offset);
+      printf("nrbytes: %d\nOffset: %d\nAux: %s\n",nrbytes,offset, aux);
+      // Preencher de 0 no inicio até conter 5 bytes:
+
+      if(strlen(aux) < 5) {
+        char tempBuf[6];
+        for(k = 0; k < 6 ; k++) {
+          if(k < 5 - strlen(aux)){
+            tempBuf[k] = '0';
+          }
+          else {
+            tempBuf[k] = aux[k - (strlen(aux)+1)];
+          }
+        }
+        tempBuf[k] = '\0';
+        printf("Tempbuf: %s\n",tempBuf);
+        strcpy(aux, tempBuf);
+      }
+
+      fwrite(aux, sizeof(char), 5, fp);
+    }
+
+    else /*  Arquivo já existe  */ {
+      // VERIFICAR SE O USUARIO POSSUI PERMISSAO PARA ESCREVER AQUI, SENAO RETORNAR No_Permission
+    }
+
+    // Escrever no arquivo
+
+
+
+
+    fclose(fp);
+  }
+  return No_errors;
+}
+
+
+
+int createFile(char * path, FILE ** file) {
   char file_name[MAXPATHLEN] = { 0 };
   char cwd[MAXPATHLEN]; //Current working directory
   char curr_file[MAXPATHLEN];
@@ -236,7 +339,10 @@ int createFile(char * path) {
     strcat(cwd, file_name);
 
     fp = fopen(&path[1], "w");
-    fclose(fp);
+
+      //ESCREVER METADADOS DO ARQUIVO: DONO, PERMISSOES ETC
+
+    *file = fp;
     return 1;
   }   
 
@@ -250,17 +356,47 @@ int createFile(char * path) {
       stat(curr_file, &file_info);
       
       if(S_ISREG(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o arquivo, retornar erro */ {
+        fp = fopen(&path[1], "w");
+        *file = fp;
+        
         return 0;
       }
     }
 
     // Criar arquivo e retornar true
     fp = fopen(&path[1], "w");
-    fclose(fp);
+            //ESCREVER METADADOS DO ARQUIVO: DONO, PERMISSOES ETC
+
+    *file = fp;
     return 1;
 
   }
 }
 
 
+
+
+
+
+
+/*
+*
+* Funçoes estaticas
+*
+*/
+
+
+static int file_select(const struct direct *entry) {     
+	if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0)) return (0); // false     
+		else return (1); //true
+}
+
+
+static int parse (char *buf, int *cmd, char *name) {
+    char *cmdstr;
+
+    cmdstr = strtok(buf," ");
+        name = strtok(NULL,"\0");
+    cmd = atoi(cmdstr);
+}
 

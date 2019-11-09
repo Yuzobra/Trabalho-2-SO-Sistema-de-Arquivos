@@ -1,1 +1,1 @@
-gcc -o ./SFS-root-dir/udpserver ./UDP-example/udpserver.c; clear; cd SFS-root-dir; ./udpserver 3999
+gcc -o ./SFS-root-dir/udpserver ./Code/udpserver.c; clear; cd SFS-root-dir; ./udpserver 3999

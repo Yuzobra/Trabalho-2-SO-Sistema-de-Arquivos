@@ -1,0 +1,22 @@
+Prototipo de request:
+
+    Ex:  WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00170000ConteudoDoArquivo
+         |_____|_|________________________|___|_|___|___|________________|
+           v    v            v             v   v v    v         v
+           1    2            3             4   5 6    7         8
+
+1: Tipo de request (6 caracteres)
+
+2: Tamanho do path
+
+3: Path do arquivo
+
+4: Id usuário (4 bytes)
+
+5: Permissões  (2 bytes)
+
+6: Numero de bytes da string (4 bytes)
+
+7: Offset (4 bytes)
+
+8: String a ser salva
