@@ -21,6 +21,7 @@
 
 #include "udpserver.h"
 
+#define MAXFILESIZE 20009 // offset: 9999  && strlen: 9999 && METADASIZE
 #define METADATASIZE 11
 #define BUFSIZE 1024
 
@@ -31,7 +32,6 @@ char __base__[MAXPATHLEN];
 
 static int file_select(const struct direct *entry);
 static int parse (char *buf, int *cmd, char *name);
-
 
 
 /*
@@ -177,9 +177,10 @@ int main(int argc, char **argv) {
 
 Errors doCommand(char * req, int lenReq) {
   char aux[BUFSIZE];
+  char fileContents[MAXFILESIZE];
   int i, k = 0;
+  int offset, nrbytes, contentIndex;
 
-  printf("doCommand\n");
 
 
   for(i = 0; i < 6; i++) {
@@ -201,28 +202,32 @@ Errors doCommand(char * req, int lenReq) {
     aux[k] = '\0';
     lenPath = atoi(aux);
     k = 0;
-    printf("Len Path: %d\n", lenPath);
     for(; k < lenPath; i++) {
       path[k++] = req[i]; 
       // printf("%c\n", req[i]);
     
     }
     path[k] = '\0';
-    printf("PATH: %s\n", path);
+    // printf("PATH: %s\n", path);
     
     //Verificar se arquivo existe:
     if(createFile(path, &fp) == 1) /* Arquivo foi criado agora */ {
-      int offset, nrbytes;
+      
+      char IDPERMBUF[7] = { 0 };
       /* Metadados:
       * 4 bytes: ID Usuario
       * 2 bytes: Permissoes
       * 5 bytes: Numero de bytes já escritos no arquivo
       */  
+
       
-      for(k=0; k < 6; i++) /* ID + Permissoes */ {
-        aux[k++] = req[i];
+      for(k=0; k < 6; k++) /* ID + Permissoes */ {
+        IDPERMBUF[k] = req[i];
+        aux[k] = req[i++];
+
       }
       aux[k] = '\0';
+      IDPERMBUF[6] = '\0';
       fwrite(aux, sizeof(char), 6, fp);  
       
       for(k=0; k < 4; i++) /* NRBytes */ {
@@ -236,37 +241,145 @@ Errors doCommand(char * req, int lenReq) {
       }
       aux[k] = '\0';
       offset = atoi(aux);
-      
+      contentIndex = i; // Pegar index de inicio da string
 
 
       sprintf(aux, "%d", nrbytes + offset);
-      printf("nrbytes: %d\nOffset: %d\nAux: %s\n",nrbytes,offset, aux);
-      // Preencher de 0 no inicio até conter 5 bytes:
 
+      // Preencher de 0 no inicio até conter 5 bytes:
       if(strlen(aux) < 5) {
         char tempBuf[6];
-        for(k = 0; k < 6 ; k++) {
+        for(k = 0; k < 5 ; k++) {
           if(k < 5 - strlen(aux)){
             tempBuf[k] = '0';
           }
           else {
-            tempBuf[k] = aux[k - (strlen(aux)+1)];
+            // printf("ELSE: %c\n", aux[k - (5 - strlen(aux))]);
+            tempBuf[k] = aux[k - (5-strlen(aux))];
           }
         }
         tempBuf[k] = '\0';
+        strcpy(aux,tempBuf);
         printf("Tempbuf: %s\n",tempBuf);
-        strcpy(aux, tempBuf);
       }
+      printf("nrbytes: %d\nOffset: %d\nAux: %s\n",nrbytes,offset, aux);
 
       fwrite(aux, sizeof(char), 5, fp);
+
+      // Salvar metadados em AUX:
+      k = 0;
+      for(i = METADATASIZE - 5; i < METADATASIZE; i++) {
+        aux[i] = aux[k++]; 
+      }
+      
+
+      for(i = 0; i < 6; i++) {
+        aux[i] = IDPERMBUF[i];
+      }
+
+      aux[METADATASIZE] = '\0';
+
+
+      // Preencher o espaco ate o offset
+      if(offset != 0) {
+        fseek(fp, METADATASIZE, SEEK_SET);
+        for(i = 0; i < offset; i++) {
+          fwrite(" ", sizeof(char), 1, fp);
+        }
+      }
+
+
+
     }
 
     else /*  Arquivo já existe  */ {
-      // VERIFICAR SE O USUARIO POSSUI PERMISSAO PARA ESCREVER AQUI, SENAO RETORNAR No_Permission
+      char reqData[5];
+      char fileData[5];
+      int nrExistingBytes;
+      fread(aux,sizeof(char), METADATASIZE, fp);
+      aux[METADATASIZE] = '\0';
+      printf("MetaData: %s\n", aux);
+
+
+      // Pegar o usuáriodo request e do arquivo
+      for(k = 0; k < 4; k++) {
+        reqData[k] = req[i++];
+        fileData[k] = aux[k];
+      }
+      reqData[k] = '\0';
+      fileData[k] = '\0';
+
+      printf("ReqData: %s\n", reqData);
+      printf("fileData: %s\n", fileData);
+
+
+      // Verificar permissão de escrita
+      if(strcmp(reqData, fileData) == 0) /* O request vem do dono do arquivo */ {
+        printf("Dono do arquivo\n");
+
+        if(aux[4] != 'W') {
+          fclose(fp);
+          return No_Permission;
+        }
+      }
+      else /* O request vem de outra usuário */ {
+        printf("Outro usuario\n");
+        if(aux[5] != 'W') {
+          fclose(fp);
+          return No_Permission;
+        }
+      }
+
+      // Pegar a quantidade de bytes ja escritos no arquivo
+      nrExistingBytes = atoi(&aux[strlen(aux) - 5]);
+
+      i += 2;
+      // Pegar o Offset e o nrbytes
+      for(k=0; k < 4; k++) /* NRBytes */ {
+        aux[k] = req[i++];
+      }
+      aux[k] = '\0';
+      nrbytes = atoi(aux);
+
+      for(k=0; k < 4; i++) /* Offset */ {
+        aux[k++] = req[i];
+      }
+      aux[k] = '\0';
+      offset = atoi(aux);
+      contentIndex = i; // Pegar o index de inicio da string
+
+      printf("Existing bytes: %d\nOffset: %d\nnrBytes: %d\n",nrExistingBytes,offset,nrbytes);
+
+      // Se a nova string ultrapassar o tamanho atual do arquivo:
+      if(offset + nrbytes > nrExistingBytes) {
+        char totalBytes[5];
+        printf("é maior\n");
+
+        sprintf(totalBytes, "%d", offset+nrbytes);
+        
+        // Preencher os espaços vazios
+        if(offset + nrbytes > nrExistingBytes) {
+          fseek(fp, METADATASIZE + nrExistingBytes, SEEK_SET);
+          for(i = 0; i < offset - nrExistingBytes + 1; i++) {
+            fwrite(" ", sizeof(char), 1, fp);
+          }
+        }
+// WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00010002C
+// WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00180015ConteudoDoArquivo1
+
+        // Alterar nos metadados
+        fseek(fp, 6+(5-strlen(totalBytes)), SEEK_SET);
+        fwrite(totalBytes, sizeof(char), strlen(totalBytes), fp);
+      }
+
     }
 
     // Escrever no arquivo
-
+    // printf("vou escrever\n");
+    // fseek(fp, METADATASIZE+30, SEEK_SET);
+    // printf("%d\n",fwrite("aaa", sizeof(char), 3, fp)); // JA ESTA SOBREESCREVENDO NA POSICAO DO FSEEK, SO DESCOBRIR O OFFSET PASSADO NO REQUEST
+    fseek(fp, METADATASIZE + offset, SEEK_SET);
+    fwrite(&req[contentIndex], sizeof(char), strlen(&req[contentIndex]), fp);
 
 
 
@@ -288,7 +401,7 @@ int createFile(char * path, FILE ** file) {
 
   int count, i, k = 0, file_num;
 
-  for(i = 1; path[i]; i++) {
+  for(i = 1; path[i]; i++) /* Navegar até(ou criar) a pasta */ {
 
     if(path[i] == '/') /* Pasta */{
       k = 0;
@@ -356,7 +469,7 @@ int createFile(char * path, FILE ** file) {
       stat(curr_file, &file_info);
       
       if(S_ISREG(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o arquivo, retornar erro */ {
-        fp = fopen(&path[1], "w");
+        fp = fopen(&path[1], "r+");
         *file = fp;
         
         return 0;
@@ -365,8 +478,6 @@ int createFile(char * path, FILE ** file) {
 
     // Criar arquivo e retornar true
     fp = fopen(&path[1], "w");
-            //ESCREVER METADADOS DO ARQUIVO: DONO, PERMISSOES ETC
-
     *file = fp;
     return 1;
 
