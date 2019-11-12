@@ -26,6 +26,7 @@
 #define BUFSIZE 1024
 
 char __base__[MAXPATHLEN]; 
+char clientResponse[100];
 
 
 // Prototipos de funcoes estaticas
@@ -62,6 +63,7 @@ int main(int argc, char **argv) {
 
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
+  Errors status;        // Return of doCommand function
 
 
   if (getcwd(__base__, MAXPATHLEN) == NULL )  {  
@@ -148,19 +150,45 @@ int main(int argc, char **argv) {
     
     // INTERPRETA COMANDO RECEBIDO AQUI
 
-    printf("%d\n",doCommand(buf, strlen(buf)));
+    status = doCommand(buf, strlen(buf));
+    if(status == No_errors) {
+      n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
+          (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0)
+        error("ERROR in sendto");
+      printf("Number of sent bytes: %d\n", n);
+    }
+    else if(status == No_Permission) {
+      strcpy(clientResponse, "No Permission to perform this action");
+      n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
+                 (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0)
+        error("ERROR in sendto");
+    }
 
+    else if (status == Out_of_Bounds) {
+      strcpy(clientResponse, "Request exceeds file size");
+      n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
+                 (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0)
+        error("ERROR in sendto");
+    }
+    
+    else if(status == File_Does_Not_Exist) {
+      strcpy(clientResponse, "File does not exist");
+      n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
+                 (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0)
+        error("ERROR in sendto");
+    }
 
-
-
-
-    /*
-     * sendto: echo the input back to the client
-     */
-    n = sendto(sockfd, buf, strlen(buf), 0,
-	       (struct sockaddr *) &clientaddr, clientlen);
-    if (n < 0)
-      error("ERROR in sendto");
+    else if(status == Dir_Already_Exists) {
+      strcpy(clientResponse, "Directory already exists");
+      n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
+                 (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0)
+        error("ERROR in sendto");
+    }
   }
 }
 
@@ -188,7 +216,7 @@ Errors doCommand(char * req, int lenReq) {
   }
   aux[i] = '\0';
 
-  if(strcmp(aux, "WR-REQ") == 0)  /* Escrever arquivo */  {
+  if(strcmp(aux, "WR-REQ") == 0)  /* Escrever arquivo  #TODO: IMPLEMENTAR O DELETE */  {
     printf("Write Request\n");
 
     FILE * fp;
@@ -197,21 +225,18 @@ Errors doCommand(char * req, int lenReq) {
     // Pegar len do path
     for(i = 6; req[i] != '/'; i++ ) {
       aux[k++] = req[i];
-      // printf("%c\n", req[i]);
     }
     aux[k] = '\0';
     lenPath = atoi(aux);
     k = 0;
     for(; k < lenPath; i++) {
       path[k++] = req[i]; 
-      // printf("%c\n", req[i]);
     
     }
     path[k] = '\0';
-    // printf("PATH: %s\n", path);
     
     //Verificar se arquivo existe:
-    if(createFile(path, &fp) == 1) /* Arquivo foi criado agora */ {
+    if(getFileDescriptor(path, &fp, Write) == File_Does_Not_Exist) /* Arquivo foi criado agora */ {
       
       char IDPERMBUF[7] = { 0 };
       /* Metadados:
@@ -254,15 +279,12 @@ Errors doCommand(char * req, int lenReq) {
             tempBuf[k] = '0';
           }
           else {
-            // printf("ELSE: %c\n", aux[k - (5 - strlen(aux))]);
             tempBuf[k] = aux[k - (5-strlen(aux))];
           }
         }
         tempBuf[k] = '\0';
         strcpy(aux,tempBuf);
-        printf("Tempbuf: %s\n",tempBuf);
       }
-      printf("nrbytes: %d\nOffset: %d\nAux: %s\n",nrbytes,offset, aux);
 
       fwrite(aux, sizeof(char), 5, fp);
 
@@ -309,21 +331,14 @@ Errors doCommand(char * req, int lenReq) {
       reqData[k] = '\0';
       fileData[k] = '\0';
 
-      printf("ReqData: %s\n", reqData);
-      printf("fileData: %s\n", fileData);
-
-
       // Verificar permissão de escrita
       if(strcmp(reqData, fileData) == 0) /* O request vem do dono do arquivo */ {
-        printf("Dono do arquivo\n");
-
         if(aux[4] != 'W') {
           fclose(fp);
           return No_Permission;
         }
       }
       else /* O request vem de outra usuário */ {
-        printf("Outro usuario\n");
         if(aux[5] != 'W') {
           fclose(fp);
           return No_Permission;
@@ -348,12 +363,9 @@ Errors doCommand(char * req, int lenReq) {
       offset = atoi(aux);
       contentIndex = i; // Pegar o index de inicio da string
 
-      printf("Existing bytes: %d\nOffset: %d\nnrBytes: %d\n",nrExistingBytes,offset,nrbytes);
-
       // Se a nova string ultrapassar o tamanho atual do arquivo:
       if(offset + nrbytes > nrExistingBytes) {
         char totalBytes[5];
-        printf("é maior\n");
 
         sprintf(totalBytes, "%d", offset+nrbytes);
         
@@ -364,33 +376,174 @@ Errors doCommand(char * req, int lenReq) {
             fwrite(" ", sizeof(char), 1, fp);
           }
         }
-// WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00010002C
-// WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00180015ConteudoDoArquivo1
+
 
         // Alterar nos metadados
         fseek(fp, 6+(5-strlen(totalBytes)), SEEK_SET);
         fwrite(totalBytes, sizeof(char), strlen(totalBytes), fp);
       }
-
     }
 
     // Escrever no arquivo
-    // printf("vou escrever\n");
-    // fseek(fp, METADATASIZE+30, SEEK_SET);
-    // printf("%d\n",fwrite("aaa", sizeof(char), 3, fp)); // JA ESTA SOBREESCREVENDO NA POSICAO DO FSEEK, SO DESCOBRIR O OFFSET PASSADO NO REQUEST
     fseek(fp, METADATASIZE + offset, SEEK_SET);
     fwrite(&req[contentIndex], sizeof(char), strlen(&req[contentIndex]), fp);
-
-
-
     fclose(fp);
+    
+    strcpy(clientResponse, "Written sucessfully");
+  // #TODO DELETAR:
+  // WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00010002C
+  // WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00180015ConteudoDoArquivo1
+  }
+
+  else if(strcmp(aux, "RD-REQ") == 0) {
+    printf("Read Request\n");
+
+    FILE * fp;
+    int lenPath;
+    char path[MAXPATHLEN];
+    // Pegar len do path
+    for(i = 6; req[i] != '/'; i++ ) {
+      aux[k++] = req[i];
+    }
+    aux[k] = '\0';
+    lenPath = atoi(aux);
+    k = 0;
+    for(; k < lenPath; i++) {
+      path[k++] = req[i]; 
+    
+    }
+    path[k] = '\0';
+    
+    //Verificar se arquivo existe:
+    if(getFileDescriptor(path, &fp, Read) == File_Does_Not_Exist) /* Arquivo não existe */ {
+      printf("Arquivo nao existe\n");
+
+      // #TODO : COLOCAR NUMA VARIAVEL GLOBAL QUE O ReqType RECEBIDO FOI DE LEITURA, UTILIZAR ISTO COM RETORNO PARA RETORNAR PARA O USUARIO
+      return File_Does_Not_Exist;
+    }
+
+    else /* Encontrou o arquivo */ {
+      // VERIFICAR PERMISSAO
+      printf("Arquivo existe\n");
+      char aux[METADATASIZE];
+      char reqData[5];
+      char fileData[5];
+      int nrExistingBytes;
+      fread(aux,sizeof(char), METADATASIZE, fp);
+      aux[METADATASIZE] = '\0';
+      printf("MetaData: %s\n", aux);
+
+
+      // Pegar o usuáriodo request e do arquivo
+      for(k = 0; k < 4; k++) {
+        reqData[k] = req[i++];
+        fileData[k] = aux[k];
+      }
+      reqData[k] = '\0';
+      fileData[k] = '\0';
+
+      // Verificar permissão de escrita
+      if(strcmp(reqData, fileData) == 0) /* O request vem do dono do arquivo */ {
+        if(aux[4] == '0') {
+          fclose(fp);
+          return No_Permission;
+        }
+      }
+      else /* O request vem de outra usuário */ {
+        if(aux[5] == '0') {
+          fclose(fp);
+          return No_Permission;
+        }
+      }
+      // Pegar a quantidade de bytes ja escritos no arquivo
+      nrExistingBytes = atoi(&aux[strlen(aux) - 5]);
+
+      i += 2;
+      // Pegar o Offset e o nrbytes
+      for(k=0; k < 4; k++) /* NRBytes */ {
+        aux[k] = req[i++];
+      }
+      aux[k] = '\0';
+      nrbytes = atoi(aux);
+
+      for(k=0; k < 4; i++) /* Offset */ {
+        aux[k++] = req[i];
+      }
+      aux[k] = '\0';
+      offset = atoi(aux);
+
+      printf("NRBytes: %d\nOffset: %d \nnrExistingBytes: %d\n", nrbytes, offset, nrExistingBytes);
+      fseek(fp, METADATASIZE, SEEK_SET);
+
+      // Verificar se o que ele quer ler esta dentro do limite do arquivo:
+      if(offset > nrExistingBytes) /* O comeco da leitura vem depois do final do arquivo */ {
+        printf("Out of bounds\n");
+        fclose(fp);
+        return Out_of_Bounds; //#TODO: TRATAMENTO DESTE RETORNO
+      }
+
+      else if(offset + nrbytes > nrExistingBytes) /* O comeco da leitura existe, mas o usuario requisita mais bytes do que existem */ {
+        printf("Almost ok\n");
+        char fileContents[MAXFILESIZE];
+        printf("Quase pode ocorrer normalmente\n");
+        fseek(fp, offset, SEEK_CUR);
+        fread(fileContents, sizeof(char) ,nrExistingBytes - offset, fp);
+
+        printf("Conteudo: %s\n", fileContents);
+        strcpy(clientResponse, fileContents);
+      }
+
+      else /* A leitura pode ocorrer normalmente */ {
+        char fileContents[MAXFILESIZE];
+        printf("Pode ocorrer normalmente\n");
+        fseek(fp, offset, SEEK_CUR);
+        fread(fileContents, sizeof(char) ,nrbytes, fp);
+
+        printf("Conteudo: %s\n", fileContents);
+        strcpy(clientResponse, fileContents);
+      }
+
+      fclose(fp);
+    }
+  // RD-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00100015
+  }
+
+  else if(strcmp(aux, "DC-REQ") == 0) {
+    printf("Directory create request\n");
+
+    FILE * fp;
+    int lenPath;
+    char path[MAXPATHLEN];
+    // Pegar len do path
+    for(i = 6; req[i] != '/'; i++ ) {
+      aux[k++] = req[i];
+    }
+    aux[k] = '\0';
+    lenPath = atoi(aux);
+    k = 0;
+    for(; k < lenPath; i++) {
+      path[k++] = req[i]; 
+    
+    }
+    path[k] = '\0';
+    
+    //Verificar se arquivo existe:
+    if(getFileDescriptor(path, &fp, Dir_Only) == No_errors) /* Diretorio foi criado com sucesso */ {
+      strcpy(clientResponse, "Directory created with sucess\n");
+      printf("Diretorio criado\n");
+    }
+
+    else /* Directory name already in use */ {
+      return Dir_Already_Exists;
+    }
+  //DC-REQ25/Pasta/Pasta2/NMDirectory
   }
   return No_errors;
 }
 
 
 
-int createFile(char * path, FILE ** file) {
+Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
   char file_name[MAXPATHLEN] = { 0 };
   char cwd[MAXPATHLEN]; //Current working directory
   char curr_file[MAXPATHLEN];
@@ -408,6 +561,10 @@ int createFile(char * path, FILE ** file) {
       count = scandir( cwd, &files, file_select, alphasort);  
       if (count <= 0) /* Pasta vazia */{ 
         // printf("No files in this directory, creating new directory\n");
+
+        if(mode != Write) {
+          return File_Does_Not_Exist;
+        }
         strcat(cwd, "/");
         strcat(cwd, file_name);
 
@@ -429,6 +586,9 @@ int createFile(char * path, FILE ** file) {
         }
 
         if(file_num == count+1) /* Não encontrou a pasta */{
+          if(mode == Read){
+            return File_Does_Not_Exist;
+          }
           strcat(cwd, "/");
           strcat(cwd, file_name);
           mkdir(cwd, 0777);
@@ -447,16 +607,27 @@ int createFile(char * path, FILE ** file) {
   count = scandir( cwd, &files, file_select, alphasort);  
   if (count <= 0) /* Pasta vazia */{ 
     FILE * fp;
-    // printf("No files in this directory, creating new file\n");
-    strcat(cwd, "/");
-    strcat(cwd, file_name);
 
-    fp = fopen(&path[1], "w");
+    if(mode == Read) {
+      return File_Does_Not_Exist;
+    }
 
-      //ESCREVER METADADOS DO ARQUIVO: DONO, PERMISSOES ETC
-
-    *file = fp;
-    return 1;
+    if(mode == Write){
+      printf("No files in this directory, creating new file\n");
+      strcat(cwd, "/");
+      strcat(cwd, file_name);
+      fp = fopen(&path[1], "w+");
+      *file = fp;
+      return File_Does_Not_Exist;
+    }
+    
+    else if (mode == Dir_Only) {
+      printf("No files in this directory. Creating new directory\n");
+      strcat(cwd, "/");
+      strcat(cwd, file_name);
+      mkdir(cwd, 0777);
+      return No_errors;
+    }
   }   
 
   else /* Pasta não está vazia, é preciso percorrer os arquivos */{
@@ -468,19 +639,37 @@ int createFile(char * path, FILE ** file) {
       strcat(curr_file, files[file_num-1]->d_name);
       stat(curr_file, &file_info);
       
-      if(S_ISREG(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o arquivo, retornar erro */ {
-        fp = fopen(&path[1], "r+");
-        *file = fp;
-        
-        return 0;
+      if(mode == Write) {
+        if(S_ISREG(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o arquivo */ {
+          fp = fopen(&path[1], "r+");
+          *file = fp;
+          
+          return No_errors;
+        }
+      }
+      else if(mode == Dir_Only) {
+        if(S_ISDIR(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o diretorio */ {
+          return Dir_Already_Exists;
+        }
       }
     }
 
-    // Criar arquivo e retornar true
-    fp = fopen(&path[1], "w");
-    *file = fp;
-    return 1;
+    // File of directory does not exist, create it if necessary
+    if(mode == Read) {
+      return File_Does_Not_Exist;
+    }
 
+    
+    else if(mode == Dir_Only) /* Criar diretorio */ {
+      mkdir(&path[1], 0777);
+      return No_errors;
+    }
+    
+    else /* Criar arquivo e retornar que foi criado agora */ {
+      fp = fopen(&path[1], "w");
+      *file = fp;
+      return File_Does_Not_Exist;
+    }
   }
 }
 

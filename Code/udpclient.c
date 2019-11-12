@@ -66,11 +66,14 @@ int main(int argc, char **argv) {
     n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
     if (n < 0) 
       error("ERROR in sendto");
-    
     /* print the server's reply */
     n = recvfrom(sockfd, buf, strlen(buf), 0, &serveraddr, &serverlen);
     if (n < 0) 
       error("ERROR in recvfrom");
-    printf("Echo from server: %s", buf);
+    printf("Message from server: ");
+    for(int i = 0; i < n; i ++) {
+      printf("%c",buf[i]);
+    }
+    printf("\n");
     return 0;
 }
