@@ -57,21 +57,37 @@ int main(int argc, char **argv) {
     serveraddr.sin_port = htons(portno);
 
     /* get a message from the user */
+
+
+
+
+
+            //#TODO ADICIONAR INTERFACE PARA USUARIO AQUI
+
+
+
+
+
+
+
+
     bzero(buf, BUFSIZE);
     printf("Please enter msg: ");
     fgets(buf, BUFSIZE, stdin);
 
     /* send the message to the server */
     serverlen = sizeof(serveraddr);
-    n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
+    n = sendto(sockfd, buf, BUFSIZE, 0, &serveraddr, serverlen);
     if (n < 0) 
       error("ERROR in sendto");
     /* print the server's reply */
-    n = recvfrom(sockfd, buf, strlen(buf), 0, &serveraddr, &serverlen);
+    
+    n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
     if (n < 0) 
       error("ERROR in recvfrom");
+    
     printf("Message from server: ");
-    for(int i = 0; i < n; i ++) {
+    for(int i = 0; i < n; i++) {
       printf("%c",buf[i]);
     }
     printf("\n");

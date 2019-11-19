@@ -427,7 +427,6 @@ Errors doCommand(char * req, int lenReq) {
     }
 
     else /* Encontrou o arquivo */ {
-      // VERIFICAR PERMISSAO
       printf("Arquivo existe\n");
       char aux[METADATASIZE];
       char reqData[5];
@@ -445,8 +444,7 @@ Errors doCommand(char * req, int lenReq) {
       }
       reqData[k] = '\0';
       fileData[k] = '\0';
-
-      // Verificar permissão de escrita
+      // Verificar permissão de leitura
       if(strcmp(reqData, fileData) == 0) /* O request vem do dono do arquivo */ {
         if(aux[4] == '0') {
           fclose(fp);
@@ -510,6 +508,73 @@ Errors doCommand(char * req, int lenReq) {
       fclose(fp);
     }
   // RD-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00100015
+  }
+
+  else if(strcmp(aux, "FI-REQ") == 0) {
+    printf("Information Request\n");
+
+    FILE * fp;
+    int lenPath;
+    char path[MAXPATHLEN];
+    // Pegar len do path
+    for(i = 6; req[i] != '/'; i++ ) {
+      aux[k++] = req[i];
+    }
+    aux[k] = '\0';
+    lenPath = atoi(aux);
+    k = 0;
+    for(; k < lenPath; i++) {
+      path[k++] = req[i]; 
+    
+    }
+    path[k] = '\0';
+    
+    //Verificar se arquivo existe:
+    if(getFileDescriptor(path, &fp, Read) == File_Does_Not_Exist) /* Arquivo não existe */ {
+      printf("Arquivo nao existe\n");
+
+      // #TODO : COLOCAR NUMA VARIAVEL GLOBAL QUE O ReqType RECEBIDO FOI DE LEITURA, UTILIZAR ISTO COM RETORNO PARA RETORNAR PARA O USUARIO
+      return File_Does_Not_Exist;
+    }
+    else /* Encontrou o arquivo */ {
+      printf("Arquivo existe\n");
+      char aux[METADATASIZE];
+      char owner[5];
+      char permissions[3];
+      char fileData[5];
+      char nrExistingBytes[6];
+      fread(aux,sizeof(char), METADATASIZE, fp);
+      aux[METADATASIZE] = '\0';
+      printf("MetaData: %s\n", aux);
+
+
+      // Pegar o usuáriodo do arquivo
+      for(k = 0; k < 4; k++) {
+        fileData[k] = aux[k];
+      }
+      fileData[k] = '\0';
+      strcpy(owner,fileData); // Pegar o dono do arquivo
+      i = 0;
+      for(k = 4; k < 6; k++) {
+        fileData[i++] = aux[k];
+      }
+      fileData[i] = '\0';
+      strcpy(permissions, fileData);
+
+
+      // Pegar a quantidade de bytes ja escritos no arquivo
+      strcpy(nrExistingBytes,&aux[strlen(aux) - 5]);
+
+      strcpy(clientResponse, "Id do dono: ");
+      strcat(clientResponse, owner);
+      strcat(clientResponse, "\nPermissoes: ");
+      strcat(clientResponse,permissions);
+      strcat(clientResponse, "\nQuantidade de bytes escritos no arquivo: ");
+      strcat(clientResponse, nrExistingBytes);
+      fclose(fp);
+    }
+  // FI-REQ25/Pasta/Pasta2/NomeArq.txt
+  // FI-REQ37/Pasta/Pasta2/NMDirectory/NomeArq.txt
   }
 
   else if(strcmp(aux, "DC-REQ") == 0) /* Criar um diretório */ {
@@ -618,7 +683,7 @@ Errors doCommand(char * req, int lenReq) {
     }
     path[k] = '\0';
     
-
+    // #TODO
 
   }
 
@@ -647,6 +712,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
         // printf("No files in this directory, creating new directory\n");
 
         if(mode == Read || mode == Dir_Remove ) {
+          printf("Erro ao tentar criar caminhoate path\n");
           return File_Does_Not_Exist;
         }
         strcat(cwd, "/");
@@ -671,6 +737,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
 
         if(file_num == count+1) /* Não encontrou a pasta */{
           if(mode == Read || mode == Dir_Remove){
+            printf("Erro ao tentar achar caminho\n");
             return File_Does_Not_Exist;
           }
           strcat(cwd, "/");
@@ -693,6 +760,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
     FILE * fp;
 
     if(mode == Read || mode == Dir_Remove) {
+      printf("Pasta vazia sem permissão de criação\n");
       return File_Does_Not_Exist;
     }
 
@@ -741,10 +809,19 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
           return No_errors;
         }
       }
+      else if(mode == Read) {
+        if(S_ISREG(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o arquivo */ {
+          fp = fopen(&path[1], "r+");
+          *file = fp;
+          
+          return No_errors;
+        }
+      }
     }
 
     // File of directory does not exist, create it if necessary
     if(mode == Read || mode == Dir_Remove) {
+      printf("Nao foi possivel achar path\n");
       return File_Does_Not_Exist;
     }
 
