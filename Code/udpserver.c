@@ -670,6 +670,14 @@ Errors doCommand(char * req, int lenReq) {
     FILE * fp;
     int lenPath;
     char path[MAXPATHLEN];
+    char bufNames[BUFSIZE];
+    char aux[5];
+    FilesPosition positions[40];
+    DIR *dir;
+    struct dirent *entry;
+
+    struct stat buf;
+    
     // Pegar len do path
     for(i = 6; req[i] != '/'; i++ ) {
       aux[k++] = req[i];
@@ -682,9 +690,51 @@ Errors doCommand(char * req, int lenReq) {
     
     }
     path[k] = '\0';
-    
-    // #TODO
 
+    if(!(dir = opendir(&path[1]))) /* Diretorio nao existe */ {
+
+      // #TODO retornar aqui para o usuario
+      return File_Does_Not_Exist;
+    }
+    if(!(entry = readdir(dir))) /* O diretorio esta vazio */ {
+
+      //#TODO retornar aqui para o usuario
+      return Dir_Empty;
+    }
+
+
+    i=0;
+    k=0;
+    memset(bufNames, 0, BUFSIZE);
+
+    do {
+        
+        if(entry->d_name[0] != '.') {
+          positions[i++].ini = k;
+          k += strlen(entry->d_name);
+          if(i == 0) {
+            strcpy(bufNames, entry->d_name);
+          }
+          else {
+            strcat(bufNames, entry->d_name);
+          }
+        }
+      } while(entry = readdir(dir));
+
+      // Get number of files in directory
+      sprintf(clientResponse, "%d", i);
+      
+      // Begin appending index of file names
+      strcat(clientResponse, "/");
+      for(k = 0; k < i; k++) /* i possui o numero de arquivos */ {
+        sprintf(aux, "%d", positions[k].ini);
+        strcat(clientResponse, aux);
+        strcat(clientResponse, ",");
+      }
+
+      strcat(clientResponse, bufNames);
+  //DL-REQ25/Pasta/Pasta2/NMDirectory
+  //DL-REQ13/Pasta/Pasta2
   }
 
   return No_errors;

@@ -4,7 +4,8 @@ typedef enum errors {
     File_Does_Not_Exist,
     Out_of_Bounds,
     Dir_Already_Exists,
-    Dir_Not_Empty 
+    Dir_Not_Empty,
+    Dir_Empty
 } Errors;
 
 typedef enum modes {
@@ -23,7 +24,6 @@ typedef enum reqTypes {
 
 typedef struct filesPosition {
     int ini;
-    int fim;
 } FilesPosition;
 
 Errors getFileDescriptor(char * path, FILE ** file, Modes mode);
