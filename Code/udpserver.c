@@ -18,6 +18,7 @@
 #include <string.h>
 #include <time.h>
 #include <inttypes.h>
+#include <errno.h>
 
 #include "udpserver.h"
 
@@ -33,8 +34,11 @@ char clientResponse[100];
 
 static int file_select(const struct direct *entry);
 static int parse (char *buf, int *cmd, char *name);
-
-
+static void positionFill(char * path, FilesPosition * positions);
+static void positionSerialize(FilesPosition * positions, char * buf);
+int VerificaPermRec(char * path, char * idUser); /* Retorna 0 se NAO existirem arquivo que o usuario nao puder deletar, senao retorna um valor maior que 0 */ 
+void deleteDir(char * path); // Deletes directory
+void deleteAllUnderDir(char * path); /* Deletes everything under path, without looking at permissions */
 /*
  * error - wrapper for perror
  */
@@ -42,11 +46,6 @@ void error(char *msg) {
   perror(msg);
   exit(1);
 }
-
-
-
-
-
 
 
 int main(int argc, char **argv) {
@@ -64,7 +63,7 @@ int main(int argc, char **argv) {
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
   Errors status;        // Return of doCommand function
-
+  FilesPosition positions[40];
 
   if (getcwd(__base__, MAXPATHLEN) == NULL )  {  
       printf("Error getting base directory\n"); 
@@ -189,12 +188,15 @@ int main(int argc, char **argv) {
       if (n < 0)
         error("ERROR in sendto");
     }
+    else if(status == Dir_Not_Empty){
+      strcpy(clientResponse, "Directory not empty");
+      n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
+                 (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0)
+        error("ERROR in sendto");
+    }
   }
 }
-
-
-
-
 
 
 /*
@@ -393,6 +395,8 @@ Errors doCommand(char * req, int lenReq) {
   // #TODO DELETAR:
   // WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00010002C
   // WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00180015ConteudoDoArquivo1
+  // WR-REQ37/Pasta/Pasta2/NMDirectory/NomeArq.txt0020WR00180015ConteudoDoArquivo1
+  // WR-REQ37/Pasta/Pasta2/NMDirectory/NomeArq.txt0021WR00180015ConteudoDoArquivo1
   }
 
   else if(strcmp(aux, "RD-REQ") == 0) {
@@ -479,7 +483,7 @@ Errors doCommand(char * req, int lenReq) {
       if(offset > nrExistingBytes) /* O comeco da leitura vem depois do final do arquivo */ {
         printf("Out of bounds\n");
         fclose(fp);
-        return Out_of_Bounds; //#TODO: TRATAMENTO DESTE RETORNO
+        return Out_of_Bounds; 
       }
 
       else if(offset + nrbytes > nrExistingBytes) /* O comeco da leitura existe, mas o usuario requisita mais bytes do que existem */ {
@@ -508,7 +512,7 @@ Errors doCommand(char * req, int lenReq) {
   // RD-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00100015
   }
 
-  else if(strcmp(aux, "DC-REQ") == 0) {
+  else if(strcmp(aux, "DC-REQ") == 0) /* Criar um diretório */ {
     printf("Directory create request\n");
 
     FILE * fp;
@@ -528,7 +532,7 @@ Errors doCommand(char * req, int lenReq) {
     path[k] = '\0';
     
     //Verificar se arquivo existe:
-    if(getFileDescriptor(path, &fp, Dir_Only) == No_errors) /* Diretorio foi criado com sucesso */ {
+    if(getFileDescriptor(path, &fp, Dir_Create) == No_errors) /* Diretorio foi criado com sucesso */ {
       strcpy(clientResponse, "Directory created with sucess\n");
       printf("Diretorio criado\n");
     }
@@ -538,6 +542,86 @@ Errors doCommand(char * req, int lenReq) {
     }
   //DC-REQ25/Pasta/Pasta2/NMDirectory
   }
+
+  else if(strcmp(aux, "DR-REQ") == 0) /* Remover um diretorio (Somente se houver arquivos criados pelo usuario) */ {
+    printf("Directory remove request\n");
+    Errors status;
+    FILE * fp;
+    int lenPath;
+    char path[MAXPATHLEN];
+    // Pegar len do path
+    for(i = 6; req[i] != '/'; i++ ) {
+      aux[k++] = req[i];
+    }
+    aux[k] = '\0';
+    lenPath = atoi(aux);
+    k = 0;
+    for(; k < lenPath; i++) {
+      path[k++] = req[i]; 
+    
+    }
+    path[k] = '\0';
+    
+    
+    status = getFileDescriptor(path, &fp, Dir_Remove);
+    if(status == No_errors) {
+      char idReq[5];
+      idReq[0] = req[i++];
+      idReq[1] = req[i++];
+      idReq[2] = req[i++];
+      idReq[3] = req[i++];
+      idReq[4] = '\0';
+
+      // printf("idReq: %s\n", idReq);
+
+      if(VerificaPermRec(path, idReq) == 0) /* Diretorio pode ser removido com sucesso */ {
+        
+        deleteDir(path);
+
+        strcpy(clientResponse, "Directory removed with sucess\n");
+        printf("Diretorio deletado\n");
+      } 
+
+      else {
+        strcpy(clientResponse, "Permission denied: You don't have ownership over some file under this directory\n");
+        printf("Permissao negada\n");
+      }
+    }
+
+    else if(status == Dir_Not_Empty)/* Directory not empty */ {
+      return Dir_Not_Empty;
+    }
+
+    else /* Directory does not exist */ {
+      return File_Does_Not_Exist;
+    }
+  //DR-REQ25/Pasta/Pasta2/NMDirectory0020
+  //DR-REQ13/Pasta/Pasta20020
+  }
+
+  else if(strcmp(aux, "DL-REQ") == 0) /* Listar diretorio */ {
+    printf("Directory list request\n");
+    Errors status;
+    FILE * fp;
+    int lenPath;
+    char path[MAXPATHLEN];
+    // Pegar len do path
+    for(i = 6; req[i] != '/'; i++ ) {
+      aux[k++] = req[i];
+    }
+    aux[k] = '\0';
+    lenPath = atoi(aux);
+    k = 0;
+    for(; k < lenPath; i++) {
+      path[k++] = req[i]; 
+    
+    }
+    path[k] = '\0';
+    
+
+
+  }
+
   return No_errors;
 }
 
@@ -559,10 +643,10 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
     if(path[i] == '/') /* Pasta */{
       k = 0;
       count = scandir( cwd, &files, file_select, alphasort);  
-      if (count <= 0) /* Pasta vazia */{ 
+      if (count <= 0) /* Pasta vazia */ { 
         // printf("No files in this directory, creating new directory\n");
 
-        if(mode != Write) {
+        if(mode == Read || mode == Dir_Remove ) {
           return File_Does_Not_Exist;
         }
         strcat(cwd, "/");
@@ -586,7 +670,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
         }
 
         if(file_num == count+1) /* Não encontrou a pasta */{
-          if(mode == Read){
+          if(mode == Read || mode == Dir_Remove){
             return File_Does_Not_Exist;
           }
           strcat(cwd, "/");
@@ -608,7 +692,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
   if (count <= 0) /* Pasta vazia */{ 
     FILE * fp;
 
-    if(mode == Read) {
+    if(mode == Read || mode == Dir_Remove) {
       return File_Does_Not_Exist;
     }
 
@@ -621,7 +705,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
       return File_Does_Not_Exist;
     }
     
-    else if (mode == Dir_Only) {
+    else if (mode == Dir_Create) {
       printf("No files in this directory. Creating new directory\n");
       strcat(cwd, "/");
       strcat(cwd, file_name);
@@ -647,20 +731,25 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
           return No_errors;
         }
       }
-      else if(mode == Dir_Only) {
+      else if(mode == Dir_Create) {
         if(S_ISDIR(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o diretorio */ {
           return Dir_Already_Exists;
+        }
+      }
+      else if(mode == Dir_Remove) {
+        if(S_ISDIR(file_info.st_mode) && strcmp(files[file_num-1]->d_name, file_name) == 0) /* Achou o diretorio a ser removido */ {
+          return No_errors;
         }
       }
     }
 
     // File of directory does not exist, create it if necessary
-    if(mode == Read) {
+    if(mode == Read || mode == Dir_Remove) {
       return File_Does_Not_Exist;
     }
 
     
-    else if(mode == Dir_Only) /* Criar diretorio */ {
+    else if(mode == Dir_Create) /* Criar diretorio */ {
       mkdir(&path[1], 0777);
       return No_errors;
     }
@@ -672,11 +761,6 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
     }
   }
 }
-
-
-
-
-
 
 
 /*
@@ -691,6 +775,121 @@ static int file_select(const struct direct *entry) {
 		else return (1); //true
 }
 
+int VerificaPermRec(char * path, char * idUser) /* Retorna 0 se NAO existirem arquivo que o usuario nao puder deletar, senao retorna um valor maior que 0 */ {
+	char pathname[MAXPATHLEN]; //Isto pode ser muito perigoso e pode facilmente estorar a memoria, estou utilizando aqui por questoes de simplicidade
+	DIR *dir;
+	struct direct **files;
+	struct dirent *entry;
+
+	struct stat buf;
+
+  int ver = 0;
+
+	if(!(dir = opendir(&path[1]))) return 0;
+	if(!(entry = readdir(dir))) return 0;
+	
+	do {
+		if(entry->d_type == DT_DIR && strcmp(entry->d_name,".") != 0 && strcmp(entry->d_name,"..") != 0 ){
+			strcpy(pathname, path);
+			strcat(pathname,"/");
+			strcat(pathname,entry->d_name);
+      
+      // printf("Pasta: %s\n", pathname);
+
+			ver += VerificaPermRec(pathname, idUser);
+		}
+		
+		else if(entry->d_type == DT_REG && entry->d_name[0] != '.')/* Verificar id de usuario do arquivo */{
+			FILE * fp;
+      char idArq[5];
+      strcpy(pathname, &path[1]);
+			strcat(pathname,"/");
+			strcat(pathname,entry->d_name);
+			
+      // printf("Arquivo: %s\n", pathname);
+      fp = fopen(pathname, "r+");      
+
+      //verificar aqui #TODO
+      fread(idArq, sizeof(char), strlen(idUser), fp);
+      idArq[4] = '\0';
+
+      // printf("idArq: %s\n", idArq);
+      if(strcmp(idArq, idUser) != 0) /* O usuario nao tem permissao para deletar este arquivo */ {
+        return 1;
+      }
+      fclose(fp);
+		}
+	} while(entry = readdir(dir));
+	
+	return ver;	
+}
+
+void deleteDir(char * path) {
+  char pathname[MAXPATHLEN];
+  char aux[MAXPATHLEN];
+  deleteAllUnderDir(path);
+
+  strcpy(pathname, path);
+  strcpy(aux, __base__);
+  strcat(aux, pathname);
+  printf("aux: %s\n",aux);
+  if(rmdir(aux) == -1){   
+        int errnum = errno;
+        fprintf(stderr, "Value of errno: %d\n", errno);
+        perror("Error printed by perror");
+        fprintf(stderr, "Error deleting directory: %s\n", strerror( errnum ));
+      }
+}
+
+void deleteAllUnderDir(char * path) /* Deletes everything under path, without looking at permissions */ {
+  char pathname[MAXPATHLEN]; //Isto pode ser muito perigoso e pode facilmente estorar a memoria, estou utilizando aqui por questoes de simplicidade
+	char aux[MAXPATHLEN];
+  DIR *dir;
+	struct direct **files;
+	struct dirent *entry;
+
+	struct stat buf;
+
+  int ver = 0;
+
+	if(!(dir = opendir(&path[1]))) return;
+	if(!(entry = readdir(dir))) return;
+	
+	do {
+		if(entry->d_type == DT_DIR && strcmp(entry->d_name,".") != 0 && strcmp(entry->d_name,"..") != 0 ){
+			
+      strcpy(pathname, path);
+			strcat(pathname,"/");
+			strcat(pathname,entry->d_name);
+      
+			deleteAllUnderDir(pathname);
+      strcpy(aux, __base__);
+      strcat(aux, pathname);
+      strcpy(pathname,aux);
+      
+      printf("Pasta: %s\n", pathname);
+      if(rmdir(pathname) == -1){   
+        int errnum = errno;
+        fprintf(stderr, "Value of errno: %d\n", errno);
+        perror("Error printed by perror");
+        fprintf(stderr, "Error deleting directory: %s\n", strerror( errnum ));
+      }
+    }
+		
+		else if(entry->d_type == DT_REG)/* Verificar id de usuario do arquivo */{
+			FILE * fp;
+      
+      strcpy(pathname, &path[1]);
+			strcat(pathname,"/");
+			strcat(pathname,entry->d_name);
+			
+      printf("Arquivo: %s\n", pathname);
+      remove(pathname);
+      
+		}
+	} while(entry = readdir(dir));
+	
+}
 
 static int parse (char *buf, int *cmd, char *name) {
     char *cmdstr;
@@ -700,3 +899,10 @@ static int parse (char *buf, int *cmd, char *name) {
     cmd = atoi(cmdstr);
 }
 
+static void positionSerialize(FilesPosition * positions, char * buf) {
+
+}
+
+static void positionFill(char * path, FilesPosition * positions) {
+  
+}
