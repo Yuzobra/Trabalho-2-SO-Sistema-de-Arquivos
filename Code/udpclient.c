@@ -346,24 +346,6 @@ void interpretInput(char * resBuf) {
     strcpy(resBuf,"FI-REQ");
 
     // Tratar input do usuario
-    //Id usuário:
-    printf("Insira o seu ID:");
-    scanf("%s", idUser); 
-    // Preencher de 0 no inicio até conter 4 bytes:
-    if(strlen(idUser) < 4) {
-      char tempBuf[5];
-      for(k = 0; k < 4 ; k++) {
-        if(k < 4 - strlen(idUser)){
-          tempBuf[k] = '0';
-        }
-        else {
-          tempBuf[k] = idUser[k - (4-strlen(idUser))];
-        }
-      }
-      tempBuf[k] = '\0';
-      strcpy(idUser,tempBuf); // Armazenar para adicionar ao payload na hora certa
-    }
-
     // Path:
     printf("Insira o path do arquivo: ");
     scanf("%s", path);
@@ -393,16 +375,43 @@ void interpretInput(char * resBuf) {
     strcat(resBuf, path);
  
     // printf("resbuf em nome: %s\n", resBuf);
-
-    //Adicionar id ao buf
-    strcat(resBuf, idUser);
-    printf("resbuf em path: %s\n", resBuf);
-
     printf("Payload: %s\n", resBuf);
 
     break;
   case 4:
-    /* code */
+    strcpy(resBuf,"DC-REQ");
+
+    // Tratar input do usuario
+    
+    // Path:
+    printf("Insira o path do diretorio: ");
+    scanf("%s", path);
+    if(path[0] != '/') /* Verificar se o path comeca com '/' */ {
+      strcpy(aux, path);
+      strcpy(path, "/");
+      strcat(path, aux);
+    }
+    if(path[strlen(path)-1] != '/') /* Verificar se o path termina com '/' */ {
+      len = strlen(path);
+      path[len] = '/';
+      path[len+1] = '\0';
+    }
+    len = strlen(path);
+ 
+    // printf("resbuf em path: %s\n", resBuf);
+
+    //Nome do diretorio:
+    printf("Insira o nome do diretorio: ");
+    scanf("%s", aux);
+    len += strlen(aux);
+    strcat(path, aux);
+
+    sprintf(aux, "%d", len);
+
+    strcat(resBuf, aux);
+    strcat(resBuf, path);
+
+    printf("Payload: %s\n", resBuf);
     break;
   case 5:
     /* code */
