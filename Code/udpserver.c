@@ -471,7 +471,6 @@ Errors doCommand(char * req, int lenReq) {
       // Pegar a quantidade de bytes ja escritos no arquivo
       nrExistingBytes = atoi(&aux[strlen(aux) - 5]);
 
-      i += 2;
       // Pegar o Offset e o nrbytes
       for(k=0; k < 4; k++) /* NRBytes */ {
         aux[k] = req[i++];
@@ -496,9 +495,7 @@ Errors doCommand(char * req, int lenReq) {
       }
 
       else if(offset + nrbytes > nrExistingBytes) /* O comeco da leitura existe, mas o usuario requisita mais bytes do que existem */ {
-        printf("Almost ok\n");
         char fileContents[MAXFILESIZE];
-        printf("Quase pode ocorrer normalmente\n");
         fseek(fp, offset, SEEK_CUR);
         fread(fileContents, sizeof(char) ,nrExistingBytes - offset, fp);
 
@@ -508,7 +505,6 @@ Errors doCommand(char * req, int lenReq) {
 
       else /* A leitura pode ocorrer normalmente */ {
         char fileContents[MAXFILESIZE];
-        printf("Pode ocorrer normalmente\n");
         fseek(fp, offset, SEEK_CUR);
         fread(fileContents, sizeof(char) ,nrbytes, fp);
 
@@ -518,7 +514,7 @@ Errors doCommand(char * req, int lenReq) {
 
       fclose(fp);
     }
-  // RD-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00100015
+  // RD-REQ25/Pasta/Pasta2/NomeArq.txt002000100015
   }
 
   else if(strcmp(aux, "FI-REQ") == 0) {

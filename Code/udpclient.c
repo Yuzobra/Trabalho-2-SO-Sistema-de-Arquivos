@@ -238,8 +238,111 @@ void interpretInput(char * resBuf) {
 
     printf("Payload: %s\n", resBuf);
     break;
+
   case 2:
-    /* code */
+    strcpy(resBuf,"RD-REQ");
+
+    // Tratar input do usuario
+    //Id usuário:
+    printf("Insira o seu ID:");
+    scanf("%s", idUser); 
+
+
+    // Preencher de 0 no inicio até conter 4 bytes:
+    if(strlen(idUser) < 4) {
+      char tempBuf[5];
+      for(k = 0; k < 4 ; k++) {
+        if(k < 4 - strlen(idUser)){
+          tempBuf[k] = '0';
+        }
+        else {
+          tempBuf[k] = idUser[k - (4-strlen(idUser))];
+        }
+      }
+      tempBuf[k] = '\0';
+      strcpy(idUser,tempBuf); // Armazenar para adicionar ao payload na hora certa
+    }
+
+    // Path:
+    printf("Insira o path do arquivo: ");
+    scanf("%s", path);
+    if(path[0] != '/') /* Verificar se o path comeca com '/' */ {
+      strcpy(aux, path);
+      strcpy(path, "/");
+      strcat(path, aux);
+    }
+    if(path[strlen(path)-1] != '/') /* Verificar se o path termina com '/' */ {
+      len = strlen(path);
+      path[len] = '/';
+      path[len+1] = '\0';
+    }
+    len = strlen(path);
+ 
+    // printf("resbuf em path: %s\n", resBuf);
+
+    //Nome do arquivo:
+    printf("Insira o nome do arquivo: ");
+    scanf("%s", aux);
+    len += strlen(aux);
+    strcat(path, aux);
+
+    sprintf(aux, "%d", len);
+
+    strcat(resBuf, aux);
+    strcat(resBuf, path);
+ 
+    // printf("resbuf em nome: %s\n", resBuf);
+
+    //Adicionar id ao buf
+    strcat(resBuf, idUser);
+    printf("resbuf em path: %s\n", resBuf);
+
+    //Offset:
+    printf("Insira o offset da leitura:");
+    scanf("%s", offset); 
+    // Preencher de 0 no inicio até conter 4 bytes:
+    if(strlen(offset) < 4) {
+      char tempBuf[5];
+      for(k = 0; k < 4 ; k++) {
+        if(k < 4 - strlen(offset)){
+          tempBuf[k] = '0';
+        }
+        else {
+          tempBuf[k] = offset[k - (4-strlen(offset))];
+        }
+      }
+      tempBuf[k] = '\0';
+      strcpy(offset,tempBuf); // Armazenar para adicionar ao payload na hora certa
+    }
+
+
+    //Tamanho da leitura
+    printf("Insira o tamanho da leitura:");
+    scanf("%s", lenText);
+    // Preencher de 0 no inicio até conter 4 bytes:
+    if(strlen(lenText) < 4) {
+      char tempBuf[5];
+      for(k = 0; k < 4 ; k++) {
+        if(k < 4 - strlen(lenText)){
+          tempBuf[k] = '0';
+        }
+        else {
+          tempBuf[k] = lenText[k - (4-strlen(lenText))];
+        }
+      }
+      tempBuf[k] = '\0';
+      strcpy(lenText,tempBuf); // Armazenar para adicionar ao payload na hora certa
+    }
+
+    strcat(resBuf, lenText);
+    // printf("resbuf em path: %s\n", resBuf);
+
+    strcat(resBuf, offset);
+    // printf("resbuf em path: %s\n", resBuf);
+
+    printf("Payload: %s\n", resBuf);
+
+// RD-REQ25/Pasta/Pasta2/NomeArq.txt002000100015
     break;
   case 3:
     /* code */
