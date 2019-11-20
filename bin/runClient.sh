@@ -1,0 +1,1 @@
+gcc -o ./Code/udpclient ./Code/udpclient.c; clear; ./Code/udpclient localhost 3999

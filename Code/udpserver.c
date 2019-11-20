@@ -125,11 +125,13 @@ int main(int argc, char **argv) {
      */
     bzero(buf, BUFSIZE);
     n = recvfrom(sockfd, buf, BUFSIZE, 0,
-		 (struct sockaddr *) &clientaddr, &clientlen);
+    (struct sockaddr *) &clientaddr, &clientlen);
     if (n < 0)
       error("ERROR in recvfrom");
 
-    parse(buf, &cmd, name);
+
+    // parse(buf, &cmd, name);
+
     /*
      * gethostbyaddr: determine who sent the datagram
      */
@@ -188,8 +190,17 @@ int main(int argc, char **argv) {
       if (n < 0)
         error("ERROR in sendto");
     }
+
     else if(status == Dir_Not_Empty){
       strcpy(clientResponse, "Directory not empty");
+      n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
+                 (struct sockaddr *) &clientaddr, clientlen);
+      if (n < 0)
+        error("ERROR in sendto");
+    }
+    
+    else if(status == Dir_Empty) {
+      strcpy(clientResponse, "Directory empty");
       n = sendto(sockfd, clientResponse, strlen(clientResponse), 0,
                  (struct sockaddr *) &clientaddr, clientlen);
       if (n < 0)
@@ -1022,7 +1033,7 @@ static int parse (char *buf, int *cmd, char *name) {
     char *cmdstr;
 
     cmdstr = strtok(buf," ");
-        name = strtok(NULL,"\0");
+    name = strtok(NULL,"\0");
     cmd = atoi(cmdstr);
 }
 
