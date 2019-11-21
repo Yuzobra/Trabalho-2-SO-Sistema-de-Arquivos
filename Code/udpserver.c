@@ -535,7 +535,6 @@ Errors doCommand(char * req, int lenReq) {
     }
     path[k] = '\0';
     strcpy(pathCpy, path);
-    printf("pathCpy: %s\n", pathCpy);
 
     //Verificar se arquivo existe:
     if(getFileDescriptor(path, &fp, Read) == File_Does_Not_Exist) /* Arquivo não existe */ {
@@ -551,7 +550,6 @@ Errors doCommand(char * req, int lenReq) {
       char fileData[5];
       fread(aux,sizeof(char), METADATASIZE, fp);
       aux[METADATASIZE] = '\0';
-      printf("pathCpy: %s\n", pathCpy);
       printf("MetaData: %s\n", aux);
 
 
@@ -578,10 +576,6 @@ Errors doCommand(char * req, int lenReq) {
 
       strcpy(aux, __base__);
       strcat(aux, pathCpy);
-
-      printf("__base__: %s\n",__base__);
-      printf("pathCpy: %s\n", pathCpy);
-      printf("aux: %s\n", aux);
 
       if(remove(aux) == 0)
         printf("arquivo deletado\n");
@@ -1039,7 +1033,6 @@ void deleteDir(char * path) {
   strcpy(pathname, path);
   strcpy(aux, __base__);
   strcat(aux, pathname);
-  printf("aux: %s\n",aux);
   if(rmdir(aux) == -1){   
         int errnum = errno;
         fprintf(stderr, "Value of errno: %d\n", errno);
