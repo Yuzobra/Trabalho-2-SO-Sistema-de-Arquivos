@@ -1,7 +1,7 @@
 /* 
- * udpclient.c - A simple UDP client
- * usage: udpclient <host> <port>
- */
+* Nome      - Yuri Zoel Brasil
+* Matricula - 1710730
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,10 +14,11 @@
 
 #define BUFSIZE 1024
 
+int commandType = -1;
 
 // Prototipo das funcoes estaticas
-void interpretInput(char * resBuf);
-
+static void interpretInput(char * resBuf);
+static void interpretResponse(char * resBuf, int n);
 
 /* 
  * error - wrapper for perror
@@ -63,9 +64,7 @@ int main(int argc, char **argv) {
     serveraddr.sin_port = htons(portno);
 
     /* get a message from the user */
-    interpretInput(buf);
-
- 
+    interpretInput(buf); 
 
     /* send the message to the server */
     serverlen = sizeof(serveraddr);
@@ -78,18 +77,20 @@ int main(int argc, char **argv) {
     if (n < 0) 
       error("ERROR in recvfrom");
     
-    printf("Message from server: ");
-    for(int i = 0; i < n; i++) {
-      printf("%c",buf[i]);
-    }
-    printf("\n");
+
+    /* Print response to the user */
+    interpretResponse(buf, n);
     return 0;
 }
 
 
+/*
+*
+* Static functions
+*
+*/
 
-
-void interpretInput(char * resBuf) {
+static void interpretInput(char * resBuf) {
   char aux[BUFSIZE];
   char idUser[5];
   char offset[5];
@@ -97,10 +98,11 @@ void interpretInput(char * resBuf) {
   int inputType, len;
   char path[MAXPATHLEN];
   int k, c;
+  char NLCheck;
     
   bzero(resBuf, BUFSIZE);
   
-  printf("Please choose type:\n1-File Write\n2-File Read\n3-File Description\n4-Create directory\n5-Directory remove\n6-Directory List\n");
+  printf("Please choose type:\n1-File Write\n2-File Read\n3-File delete\n4-File Description\n5-Create directory\n6-Directory remove\n7-Directory List\n");
   scanf("%d", &inputType);
   switch (inputType)
   {
@@ -343,6 +345,64 @@ void interpretInput(char * resBuf) {
     printf("Payload: %s\n", resBuf);
     break;
   case 3:
+    strcpy(resBuf,"FD-REQ");
+    // Tratar input do usuario
+    //Id usuário:
+    printf("Insira o seu ID:");
+    scanf("%s", idUser); 
+
+    // Preencher de 0 no inicio até conter 4 bytes:
+    if(strlen(idUser) < 4) {
+      char tempBuf[5];
+      for(k = 0; k < 4 ; k++) {
+        if(k < 4 - strlen(idUser)){
+          tempBuf[k] = '0';
+        }
+        else {
+          tempBuf[k] = idUser[k - (4-strlen(idUser))];
+        }
+      }
+      tempBuf[k] = '\0';
+      strcpy(idUser,tempBuf); // Armazenar para adicionar ao payload na hora certa
+    }
+
+    // Path:
+    printf("Insira o path do arquivo: ");
+    scanf("%s", path);
+    if(path[0] != '/') /* Verificar se o path comeca com '/' */ {
+      strcpy(aux, path);
+      strcpy(path, "/");
+      strcat(path, aux);
+    }
+    if(path[strlen(path)-1] != '/') /* Verificar se o path termina com '/' */ {
+      len = strlen(path);
+      path[len] = '/';
+      path[len+1] = '\0';
+    }
+    len = strlen(path);
+ 
+    // printf("resbuf em path: %s\n", resBuf);
+
+    //Nome do arquivo:
+    printf("Insira o nome do arquivo: ");
+    scanf("%s", aux);
+    len += strlen(aux);
+    strcat(path, aux);
+
+    sprintf(aux, "%d", len);
+
+    strcat(resBuf, aux);
+    strcat(resBuf, path);
+ 
+    // printf("resbuf em nome: %s\n", resBuf);
+
+    //Adicionar id ao buf
+    strcat(resBuf, idUser);
+    printf("resbuf em path: %s\n", resBuf);
+
+    printf("Payload: %s\n", resBuf);
+    break;
+  case 4:
     strcpy(resBuf,"FI-REQ");
 
     // Tratar input do usuario
@@ -378,7 +438,7 @@ void interpretInput(char * resBuf) {
     printf("Payload: %s\n", resBuf);
 
     break;
-  case 4:
+  case 5:
     strcpy(resBuf,"DC-REQ");
 
     // Tratar input do usuario
@@ -413,7 +473,7 @@ void interpretInput(char * resBuf) {
 
     printf("Payload: %s\n", resBuf);
     break;
-  case 5:
+  case 6:
     strcpy(resBuf,"DR-REQ");
 
     // Tratar input do usuario
@@ -473,17 +533,78 @@ void interpretInput(char * resBuf) {
 
     printf("Payload: %s\n", resBuf);
     break;
-  case 6:
-    /* code */
+  case 7:
+    strcpy(resBuf,"DL-REQ");
+
+    // Tratar input do usuario
+    
+    // Path:
+    printf("Insira o path do diretorio: ");
+    scanf("%s", path);
+    if(path[0] != '/') /* Verificar se o path comeca com '/' */ {
+      strcpy(aux, path);
+      strcpy(path, "/");
+      strcat(path, aux);
+    }
+    if(path[strlen(path)-1] != '/') /* Verificar se o path termina com '/' */ {
+      len = strlen(path);
+      path[len] = '/';
+      path[len+1] = '\0';
+    }
+    len = strlen(path);
+ 
+    // printf("resbuf em path: %s\n", resBuf);
+
+    //Nome do diretorio:
+    printf("Insira o nome do diretorio: ");
+
+    //flush stdin
+    while ((NLCheck = getchar()) != '\n' && NLCheck != EOF);
+
+    NLCheck = 0;
+
+    NLCheck = getc(stdin);
+
+    if(NLCheck == '\n') {
+      aux[0] = '.';
+      aux[1] = '\0';
+    }
+    
+    else {
+      aux[0] = NLCheck;
+      k=1;
+      while ((NLCheck = getchar()) != '\n' && NLCheck != EOF) {
+        aux[k++] = NLCheck;
+      }
+      aux[k] = '\0';
+    }
+    len += strlen(aux);
+    strcat(path, aux);
+
+    sprintf(aux, "%d", len);
+
+    strcat(resBuf, aux);
+    strcat(resBuf, path);
+
+    printf("Payload: %s\n", resBuf);
     break;
-  
   default:
+    inputType = -1;
     printf("Acao invalida\n");
     break;
+  
   }
-  
-  
+
   // fgets(resBuf, BUFSIZE, stdin);
+  commandType = inputType;
 
+  NLCheck = 0;
+}
 
+static void interpretResponse(char *resBuf, int n) {
+    printf("Message from server: ");
+    for(int i = 0; i < n; i++) {
+      printf("%c",resBuf[i]);
+    }
+    printf("\n");
 }

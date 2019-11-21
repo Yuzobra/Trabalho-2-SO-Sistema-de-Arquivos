@@ -1,8 +1,7 @@
-/*
- * udpserver.c - A simple UDP echo server
- * usage: udpserver <port>
- */
-
+/* 
+* Nome      - Yuri Zoel Brasil
+* Matricula - 1710730
+*/
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -26,6 +25,7 @@
 #define METADATASIZE 11
 #define BUFSIZE 1024
 
+char pathCpy[MAXPATHLEN];
 char __base__[MAXPATHLEN]; 
 char clientResponse[100];
 
@@ -206,6 +206,7 @@ int main(int argc, char **argv) {
       if (n < 0)
         error("ERROR in sendto");
     }
+    strcpy(clientResponse, "");
   }
 }
 
@@ -229,7 +230,7 @@ Errors doCommand(char * req, int lenReq) {
   }
   aux[i] = '\0';
 
-  if(strcmp(aux, "WR-REQ") == 0)  /* Escrever arquivo  #TODO: IMPLEMENTAR O DELETE */  {
+  if(strcmp(aux, "WR-REQ") == 0)  /* Escrever arquivo */  {
     printf("Write Request\n");
 
     FILE * fp;
@@ -403,7 +404,6 @@ Errors doCommand(char * req, int lenReq) {
     fclose(fp);
     
     strcpy(clientResponse, "Written sucessfully");
-  // #TODO DELETAR:
   // WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00010002C
   // WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00180015ConteudoDoArquivo1
   // WR-REQ37/Pasta/Pasta2/NMDirectory/NomeArq.txt0020WR00180015ConteudoDoArquivo1
@@ -433,7 +433,6 @@ Errors doCommand(char * req, int lenReq) {
     if(getFileDescriptor(path, &fp, Read) == File_Does_Not_Exist) /* Arquivo não existe */ {
       printf("Arquivo nao existe\n");
 
-      // #TODO : COLOCAR NUMA VARIAVEL GLOBAL QUE O ReqType RECEBIDO FOI DE LEITURA, UTILIZAR ISTO COM RETORNO PARA RETORNAR PARA O USUARIO
       return File_Does_Not_Exist;
     }
 
@@ -517,6 +516,83 @@ Errors doCommand(char * req, int lenReq) {
   // RD-REQ25/Pasta/Pasta2/NomeArq.txt002000100015
   }
 
+  else if(strcmp(aux, "FD-REQ") == 0) {
+    printf("File Delete Request\n");
+
+    FILE * fp;
+    int lenPath;
+    char path[MAXPATHLEN];
+    // Pegar len do path
+    for(i = 6; req[i] != '/'; i++ ) {
+      aux[k++] = req[i];
+    }
+    aux[k] = '\0';
+    lenPath = atoi(aux);
+    k = 0;
+    for(; k < lenPath; i++) {
+      path[k++] = req[i]; 
+    
+    }
+    path[k] = '\0';
+    strcpy(pathCpy, path);
+    printf("pathCpy: %s\n", pathCpy);
+
+    //Verificar se arquivo existe:
+    if(getFileDescriptor(path, &fp, Read) == File_Does_Not_Exist) /* Arquivo não existe */ {
+      printf("Arquivo nao existe\n");
+
+      return File_Does_Not_Exist;
+    }
+
+    else /* Encontrou o arquivo */ {
+      printf("Arquivo existe\n");
+      char aux[MAXPATHLEN];
+      char reqData[5];
+      char fileData[5];
+      fread(aux,sizeof(char), METADATASIZE, fp);
+      aux[METADATASIZE] = '\0';
+      printf("pathCpy: %s\n", pathCpy);
+      printf("MetaData: %s\n", aux);
+
+
+      // Pegar o usuáriodo request e do arquivo
+      for(k = 0; k < 4; k++) {
+        reqData[k] = req[i++];
+        fileData[k] = aux[k];
+      }
+      reqData[k] = '\0';
+      fileData[k] = '\0';
+      // Verificar permissão de escrita
+      if(strcmp(reqData, fileData) == 0) /* O request vem do dono do arquivo */ {
+        if(aux[4] != 'W') {
+          fclose(fp);
+          return No_Permission;
+        }
+      }
+      else /* O request vem de outra usuário */ {
+        if(aux[5] != 'W') {
+          fclose(fp);
+          return No_Permission;
+        }
+      }
+
+      strcpy(aux, __base__);
+      strcat(aux, pathCpy);
+
+      printf("__base__: %s\n",__base__);
+      printf("pathCpy: %s\n", pathCpy);
+      printf("aux: %s\n", aux);
+
+      if(remove(aux) == 0)
+        printf("arquivo deletado\n");
+      else
+        printf("erro ao deletar\n");
+      strcpy(clientResponse, "Arquivo deletado");
+      fclose(fp);
+    }
+  // RD-REQ25/Pasta/Pasta2/NomeArq.txt002000100015
+  }
+
   else if(strcmp(aux, "FI-REQ") == 0) {
     printf("Information Request\n");
 
@@ -540,7 +616,6 @@ Errors doCommand(char * req, int lenReq) {
     if(getFileDescriptor(path, &fp, Read) == File_Does_Not_Exist) /* Arquivo não existe */ {
       printf("Arquivo nao existe\n");
 
-      // #TODO : COLOCAR NUMA VARIAVEL GLOBAL QUE O ReqType RECEBIDO FOI DE LEITURA, UTILIZAR ISTO COM RETORNO PARA RETORNAR PARA O USUARIO
       return File_Does_Not_Exist;
     }
     else /* Encontrou o arquivo */ {
@@ -699,13 +774,10 @@ Errors doCommand(char * req, int lenReq) {
     path[k] = '\0';
 
     if(!(dir = opendir(&path[1]))) /* Diretorio nao existe */ {
-
-      // #TODO retornar aqui para o usuario
       return File_Does_Not_Exist;
     }
     if(!(entry = readdir(dir))) /* O diretorio esta vazio */ {
 
-      //#TODO retornar aqui para o usuario
       return Dir_Empty;
     }
 
@@ -715,29 +787,30 @@ Errors doCommand(char * req, int lenReq) {
     memset(bufNames, 0, BUFSIZE);
 
     do {
-        
         if(entry->d_name[0] != '.') {
           positions[i++].ini = k;
           k += strlen(entry->d_name);
           if(i == 0) {
             strcpy(bufNames, entry->d_name);
+            strcat(bufNames, "\n");
           }
           else {
             strcat(bufNames, entry->d_name);
+            strcat(bufNames, "\n");
           }
         }
       } while(entry = readdir(dir));
 
       // Get number of files in directory
-      sprintf(clientResponse, "%d", i);
+      // sprintf(clientResponse, "%d", i);
       
-      // Begin appending index of file names
-      strcat(clientResponse, "/");
-      for(k = 0; k < i; k++) /* i possui o numero de arquivos */ {
-        sprintf(aux, "%d", positions[k].ini);
-        strcat(clientResponse, aux);
-        strcat(clientResponse, ",");
-      }
+      // // Begin appending index of file names
+      // strcat(clientResponse, "/");
+      // for(k = 0; k < i; k++) /* i possui o numero de arquivos */ {
+      //   sprintf(aux, "%d", positions[k].ini);
+      //   strcat(clientResponse, aux);
+      //   strcat(clientResponse, ",");
+      // }
 
       strcat(clientResponse, bufNames);
   //DL-REQ25/Pasta/Pasta2/NMDirectory
@@ -841,6 +914,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
 
   else /* Pasta não está vazia, é preciso percorrer os arquivos */{
     FILE * fp;
+
     // printf("Pasta nao esta vazia\n");
     for (file_num=1;file_num<count+1;++file_num) {
       strcpy(curr_file, cwd);
@@ -887,7 +961,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
       mkdir(&path[1], 0777);
       return No_errors;
     }
-    
+
     else /* Criar arquivo e retornar que foi criado agora */ {
       fp = fopen(&path[1], "w");
       *file = fp;
@@ -943,7 +1017,6 @@ int VerificaPermRec(char * path, char * idUser) /* Retorna 0 se NAO existirem ar
       // printf("Arquivo: %s\n", pathname);
       fp = fopen(pathname, "r+");      
 
-      //verificar aqui #TODO
       fread(idArq, sizeof(char), strlen(idUser), fp);
       idArq[4] = '\0';
 
