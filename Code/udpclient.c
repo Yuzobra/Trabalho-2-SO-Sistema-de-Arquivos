@@ -102,7 +102,7 @@ static void interpretInput(char * resBuf) {
     
   bzero(resBuf, BUFSIZE);
   
-  printf("Please choose type:\n1-File Write\n2-File Read\n3-File delete\n4-File Description\n5-Create directory\n6-Directory remove\n7-Directory List\n");
+  printf("1-File Write\n2-File Read\n3-File delete\n4-File Description\n5-Create directory\n6-Directory remove\n7-Directory List\n8-Raw Payload\nPlease choose type: ");
   scanf("%d", &inputType);
   switch (inputType)
   {
@@ -297,7 +297,7 @@ static void interpretInput(char * resBuf) {
 
     //Adicionar id ao buf
     strcat(resBuf, idUser);
-    printf("resbuf em path: %s\n", resBuf);
+    // printf("resbuf em path: %s\n", resBuf);
 
     //Offset:
     printf("Insira o offset da leitura:");
@@ -398,7 +398,7 @@ static void interpretInput(char * resBuf) {
 
     //Adicionar id ao buf
     strcat(resBuf, idUser);
-    printf("resbuf em path: %s\n", resBuf);
+    // printf("resbuf em path: %s\n", resBuf);
 
     printf("Payload: %s\n", resBuf);
     break;
@@ -529,7 +529,7 @@ static void interpretInput(char * resBuf) {
 
     //Adicionar id ao buf
     strcat(resBuf, idUser);
-    printf("resbuf em path: %s\n", resBuf);
+    // printf("resbuf em path: %s\n", resBuf);
 
     printf("Payload: %s\n", resBuf);
     break;
@@ -587,6 +587,10 @@ static void interpretInput(char * resBuf) {
     strcat(resBuf, path);
 
     printf("Payload: %s\n", resBuf);
+    break;
+  case 8:
+    printf("Insira o payload:\n");
+    scanf("%s",resBuf);
     break;
   default:
     inputType = -1;

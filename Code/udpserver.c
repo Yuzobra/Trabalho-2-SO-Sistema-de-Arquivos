@@ -258,7 +258,6 @@ Errors doCommand(char * req, int lenReq) {
       * 2 bytes: Permissoes
       * 5 bytes: Numero de bytes já escritos no arquivo
       */  
-
       
       for(k=0; k < 6; k++) /* ID + Permissoes */ {
         IDPERMBUF[k] = req[i];
