@@ -1,4 +1,16 @@
-Prototipo de request:
+Para rodar o servidor, esteja no diretorio raiz e execute:
+  $ ./bin/runServer.sh
+
+Para rodar o cliente, esteja no diretorio raiz e execute:
+  $ ./bin/runClient.sh
+
+Execute estes scripts em terminais diferentes. Estes scripts estão configurados para rodar localmente, mas é possivel compilar os arquivos udpclient.c e udpserver.c e utilizar qualquer endereço desejado
+
+
+
+
+
+Exemplo de request de write:
 
     Ex:  WR-REQ25/Pasta/Pasta2/NomeArq.txt0020WR00170000ConteudoDoArquivo
          |_____|_|________________________|___|_|___|___|________________|

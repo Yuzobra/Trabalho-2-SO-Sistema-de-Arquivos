@@ -34,8 +34,6 @@ char clientResponse[100];
 
 static int file_select(const struct direct *entry);
 static int parse (char *buf, int *cmd, char *name);
-static void positionFill(char * path, FilesPosition * positions);
-static void positionSerialize(FilesPosition * positions, char * buf);
 int VerificaPermRec(char * path, char * idUser); /* Retorna 0 se NAO existirem arquivo que o usuario nao puder deletar, senao retorna um valor maior que 0 */ 
 void deleteDir(char * path); // Deletes directory
 void deleteAllUnderDir(char * path); /* Deletes everything under path, without looking at permissions */
@@ -63,7 +61,6 @@ int main(int argc, char **argv) {
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
   Errors status;        // Return of doCommand function
-  FilesPosition positions[40];
 
   if (getcwd(__base__, MAXPATHLEN) == NULL )  {  
       printf("Error getting base directory\n"); 
@@ -747,7 +744,6 @@ Errors doCommand(char * req, int lenReq) {
     char path[MAXPATHLEN];
     char bufNames[BUFSIZE];
     char aux[5];
-    FilesPosition positions[40];
     DIR *dir;
     struct dirent *entry;
 
@@ -1096,12 +1092,4 @@ static int parse (char *buf, int *cmd, char *name) {
     cmdstr = strtok(buf," ");
     name = strtok(NULL,"\0");
     cmd = atoi(cmdstr);
-}
-
-static void positionSerialize(FilesPosition * positions, char * buf) {
-
-}
-
-static void positionFill(char * path, FilesPosition * positions) {
-  
 }
