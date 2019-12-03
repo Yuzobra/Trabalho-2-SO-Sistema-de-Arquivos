@@ -204,7 +204,7 @@ static void interpretInput(char * resBuf) {
 
     
     // Texto:
-    printf("Insira o texto a ser escrito:\n\n");
+    printf("Insira o texto a ser escrito:\n");
     
     //flush stdin
     while ((c = getchar()) != '\n' && c != EOF);
@@ -212,7 +212,6 @@ static void interpretInput(char * resBuf) {
     fgets(aux, BUFSIZE, stdin);
     if ((strlen(aux) > 0) && (aux[strlen (aux) - 1] == '\n'))
         aux[strlen (aux) - 1] = '\0';
-    // printf("LEN: %d\nTEXTO: %s\n", strlen(aux), aux);
     sprintf(lenText, "%d", strlen(aux));
     // Preencher de 0 no inicio até conter 4 bytes:
     if(strlen(lenText) < 4) {
@@ -590,8 +589,9 @@ static void interpretInput(char * resBuf) {
     break;
   case 8:
     printf("Insira o payload:\n");
-    scanf("%s",resBuf);
+    scanf("%s", resBuf);
     break;
+
   default:
     inputType = -1;
     printf("Acao invalida\n");

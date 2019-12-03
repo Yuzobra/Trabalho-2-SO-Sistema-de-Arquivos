@@ -61,6 +61,7 @@ int main(int argc, char **argv) {
   char name[BUFSIZE];   // name of the file received from client
   int cmd;              // cmd received from client
   Errors status;        // Return of doCommand function
+  FilesPosition positions[40];
 
   if (getcwd(__base__, MAXPATHLEN) == NULL )  {  
       printf("Error getting base directory\n"); 
@@ -145,7 +146,6 @@ int main(int argc, char **argv) {
     printf("server received %d/%d bytes: %s\n", strlen(buf), n, buf);
 
 
-    
     // INTERPRETA COMANDO RECEBIDO AQUI
 
     status = doCommand(buf, strlen(buf));
@@ -246,6 +246,7 @@ Errors doCommand(char * req, int lenReq) {
     }
     path[k] = '\0';
     
+    
     //Verificar se arquivo existe:
     if(getFileDescriptor(path, &fp, Write) == File_Does_Not_Exist) /* Arquivo foi criado agora */ {
       
@@ -320,8 +321,7 @@ Errors doCommand(char * req, int lenReq) {
         }
       }
 
-
-
+   
     }
 
     else /*  Arquivo já existe  */ {
@@ -393,9 +393,10 @@ Errors doCommand(char * req, int lenReq) {
         fwrite(totalBytes, sizeof(char), strlen(totalBytes), fp);
       }
     }
-
+    
     // Escrever no arquivo
     fseek(fp, METADATASIZE + offset, SEEK_SET);
+
     fwrite(&req[contentIndex], sizeof(char), strlen(&req[contentIndex]), fp);
     fclose(fp);
     
@@ -744,6 +745,7 @@ Errors doCommand(char * req, int lenReq) {
     char path[MAXPATHLEN];
     char bufNames[BUFSIZE];
     char aux[5];
+    FilesPosition positions[40];
     DIR *dir;
     struct dirent *entry;
 
@@ -831,7 +833,7 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
         // printf("No files in this directory, creating new directory\n");
 
         if(mode == Read || mode == Dir_Remove ) {
-          printf("Erro ao tentar criar caminhoate path\n");
+          printf("Erro ao tentar criar caminho ate path\n");
           return File_Does_Not_Exist;
         }
         strcat(cwd, "/");
@@ -864,6 +866,8 @@ Errors getFileDescriptor(char * path, FILE ** file, Modes mode) {
           mkdir(cwd, 0777);
         }
       }
+
+      memset(file_name, 0, MAXPATHLEN);
     }
 
     else {

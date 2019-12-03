@@ -4,8 +4,9 @@ Para rodar o servidor, esteja no diretorio raiz e execute:
 Para rodar o cliente, esteja no diretorio raiz e execute:
   $ ./bin/runClient.sh
 
-Execute estes scripts em terminais diferentes. Estes scripts estão configurados para rodar localmente, mas é possivel compilar os arquivos udpclient.c e udpserver.c e utilizar qualquer endereço desejado
+Execute estes scripts em terminais diferentes. 
 
+Estes scripts estão configurados para rodar localmente, mas é possivel compilar os arquivos udpclient.c e udpserver.c e rodar utilizando qualquer endereço desejado
 
 
 

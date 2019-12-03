@@ -16,6 +16,16 @@ typedef enum modes {
     Dir_Remove
 } Modes;
 
+typedef enum reqTypes {
+    File_Write,
+    File_Read
+} reqTypes;
+
+
+typedef struct filesPosition {
+    int ini;
+} FilesPosition;
+
 Errors getFileDescriptor(char * path, FILE ** file, Modes mode);
 
 Errors doCommand(char * req, int lenReq);
